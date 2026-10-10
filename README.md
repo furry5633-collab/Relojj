@@ -2,9 +2,11 @@
 
 Reloj minimalista a pantalla completa, distribuido como una Progressive Web App (PWA).
 
-## Sitio publicado
+## URL de GitHub Pages
 
 https://furry5633-collab.github.io/Relojj/
+
+Para activar la publicación, selecciona **GitHub Actions** en **Settings → Pages → Build and deployment → Source**. Una vez habilitado, el workflow publica automáticamente los cambios de `reloj-pwa/` en esa URL al actualizar `main` o la rama de trabajo de Arena.
 
 ## Archivos
 

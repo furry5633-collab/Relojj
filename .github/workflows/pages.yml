@@ -5,6 +5,9 @@ on:
     branches:
       - main
       - arena/93be24ec-relojj
+    paths:
+      - reloj-pwa/**
+      - .github/workflows/pages.yml
   workflow_dispatch:
 
 permissions:
