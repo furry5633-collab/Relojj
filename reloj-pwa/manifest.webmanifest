@@ -1,0 +1,14 @@
+{
+  "name": "ahora. — Reloj minimalista",
+  "short_name": "ahora.",
+  "description": "Un reloj minimalista a pantalla completa.",
+  "lang": "es",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#080a0c",
+  "theme_color": "#080a0c",
+  "orientation": "any",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
