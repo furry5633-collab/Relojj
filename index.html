@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#080a0c" />
+  <meta name="description" content="Reloj minimalista a pantalla completa." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <title>Reloj</title>
+  <style>
+    :root { --bg:#080a0c; --digit:#c8ff5a; --date:rgba(244,245,242,.56); --line:rgba(244,245,242,.15); --glow:radial-gradient(ellipse 76% 90% at 84% 3%,rgba(37,65,106,.52),transparent 55%),radial-gradient(ellipse 58% 70% at 8% 105%,rgba(25,52,53,.36),transparent 58%); }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html,body { width:100%; min-height:100%; margin:0; overflow:hidden; background:#080a0c; color:var(--digit); font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { min-height:100dvh; }
+    button,input { font:inherit; color:inherit; }
+    .app { position:relative; width:100%; min-height:100dvh; overflow:hidden; background:var(--bg); }
+    .app::before { content:""; position:absolute; inset:0; pointer-events:none; background:var(--glow); }
+    .clock { position:relative; z-index:1; min-height:100dvh; display:grid; place-items:center; padding:max(22px,env(safe-area-inset-top)) max(25px,env(safe-area-inset-right)) max(22px,env(safe-area-inset-bottom)) max(25px,env(safe-area-inset-left)); touch-action:pan-y; transition:transform 260ms ease,opacity 260ms ease; }
+    .clock-inner { width:100%; display:flex; flex-direction:column; align-items:center; transform:translate(calc(var(--oled-x,0) * 1px),calc(-1vh + var(--oled-y,0) * 1px)); transition:transform 650ms ease; }
+    .time { color:var(--digit); font-family:var(--display,ui-sans-serif,-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif); font-size:clamp(82px,21.6vw,340px); font-weight:var(--weight,650); font-variant-numeric:tabular-nums lining-nums; letter-spacing:var(--spacing,-.075em); line-height:.78; white-space:nowrap; text-align:center; user-select:none; transition:color 180ms ease,letter-spacing 180ms ease,font-weight 180ms ease; }
+    .time-colon { display:inline-block; margin:0 .012em; }
+    .date { margin-top:clamp(19px,5vh,44px); color:var(--date); font-size:clamp(10px,1.55vw,17px); font-weight:700; line-height:1; letter-spacing:.16em; text-align:center; text-transform:uppercase; user-select:none; }
+    .date b { padding:0 .56em; color:var(--digit); font-weight:900; }
+    .date-hidden .date { display:none; }
+    .battery { position:absolute; top:max(24px,env(safe-area-inset-top)); left:max(25px,env(safe-area-inset-left)); width:22px; height:11px; padding:2px; border:1px solid color-mix(in srgb,var(--digit) 70%,transparent); border-radius:3px; opacity:.72; }
+    .battery::after { content:""; position:absolute; top:3px; right:-3px; width:2px; height:4px; border-radius:0 2px 2px 0; background:var(--digit); }
+    .battery-fill { display:block; width:75%; height:100%; border-radius:1px; background:var(--digit); transition:width 200ms ease; }
+    .battery.charging .battery-fill { background:#ffd166; }
+    .dimmer { position:absolute; z-index:2; inset:0; pointer-events:none; background:#000; opacity:0; transition:opacity 700ms ease; }
+    .night-dim .dimmer { opacity:.58; }
+
+    /* Panel visual: no muestra etiquetas, solamente colores e iconos. */
+    .settings { position:absolute; z-index:4; top:0; right:0; height:100%; width:min(350px,92vw); display:flex; flex-direction:column; justify-content:flex-start; gap:19px; padding:max(21px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom)); overflow-y:auto; overscroll-behavior:contain; background:var(--bg); border-left:1px solid var(--line); box-shadow:-16px 0 42px rgba(0,0,0,.35); transform:translateX(101%); transition:transform 260ms ease; }
+    .panel-open .settings { transform:translateX(0); }.panel-open .clock { transform:translateX(calc(-1 * min(145px,17vw))); opacity:.42; }
+    .setting-block { display:flex; flex-direction:column; gap:10px; }.setting-block + .setting-block { padding-top:18px; border-top:1px solid var(--line); }.setting-label { color:var(--date); font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+    .swatches { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; }.theme { appearance:none; position:relative; width:100%; aspect-ratio:1.35; padding:0; border:1px solid transparent; border-radius:12px; overflow:hidden; background:var(--sample); cursor:pointer; }.theme::after { content:""; position:absolute; inset:0; background:var(--sample-light); }.theme[aria-pressed="true"] { border-color:var(--digit); outline:1px solid color-mix(in srgb,var(--digit) 46%,transparent); outline-offset:2px; }
+    .styles { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; }.style { appearance:none; height:42px; padding:0; display:grid; place-items:center; border:1px solid var(--line); border-radius:10px; background:transparent; cursor:pointer; }.style[aria-pressed="true"] { border-color:var(--digit); background:color-mix(in srgb,var(--digit) 12%,transparent); }.glyph { width:32px; height:17px; display:flex; align-items:center; justify-content:center; gap:4px; }.glyph i { display:block; width:6px; height:17px; border-radius:4px; background:var(--digit); }.style[data-style="precise"] .glyph { gap:2px; }.style[data-style="precise"] .glyph i { width:5px; border-radius:0; }.style[data-style="wide"] .glyph { gap:8px; }.style[data-style="wide"] .glyph i { width:5px; height:15px; }
+    .colors { display:flex; justify-content:flex-start; gap:17px; padding:5px 4px; }.color { appearance:none; width:22px; height:22px; padding:0; border:2px solid transparent; border-radius:50%; background:var(--color); box-shadow:inset 0 0 0 1px rgba(255,255,255,.35); cursor:pointer; }.color[aria-pressed="true"] { outline:2px solid var(--digit); outline-offset:3px; }
+    .option-list { border:1px solid var(--line); border-radius:13px; overflow:hidden; }.option-row { min-height:59px; display:flex; align-items:center; justify-content:space-between; gap:14px; padding:11px 12px; }.option-row + .option-row { border-top:1px solid var(--line); }.option-copy { min-width:0; display:flex; flex-direction:column; gap:3px; }.option-copy strong { color:var(--digit); font-size:13px; font-weight:680; }.option-copy small { color:var(--date); font-size:10px; line-height:1.25; }
+    .switch { appearance:none; position:relative; flex:0 0 auto; width:45px; height:26px; border:1px solid var(--line); border-radius:999px; background:rgba(255,255,255,.08); padding:2px; cursor:pointer; transition:background .2s,border-color .2s; }.switch::after { content:""; display:block; width:20px; height:20px; border-radius:50%; background:rgba(255,255,255,.75); transition:transform .2s,background .2s; }.switch[aria-pressed="true"] { border-color:var(--digit); background:var(--digit); }.switch[aria-pressed="true"]::after { transform:translateX(18px); background:var(--bg); }
+    .alarm-card { padding:14px; border:1px solid color-mix(in srgb,var(--digit) 43%,var(--line)); border-radius:14px; background:color-mix(in srgb,var(--digit) 7%,transparent); }.alarm-card .option-row { min-height:43px; padding:0 0 12px; }.alarm-state { color:var(--date); font-size:10px; font-weight:650; }.alarm-state.is-on { color:var(--digit); }.time-field { display:flex; flex-direction:column; gap:7px; margin-top:12px; color:var(--date); font-size:10px; font-weight:750; letter-spacing:.07em; text-transform:uppercase; }.time-input { width:100%; height:42px; padding:0 10px; border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--digit); color-scheme:dark; font-size:14px; outline:none; }.time-input:focus { border-color:var(--digit); }.time-input:disabled { opacity:.38; cursor:not-allowed; }.alarm-note { margin:10px 0 0; color:var(--date); font-size:10px; line-height:1.35; }
+    .advanced { border-top:1px solid var(--line); padding-top:17px; }.advanced summary,.guide summary { list-style:none; display:flex; align-items:center; justify-content:space-between; color:var(--date); font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; }.advanced summary::-webkit-details-marker,.guide summary::-webkit-details-marker { display:none; }.advanced summary::after,.guide summary::after { content:"+"; font-size:17px; font-weight:400; line-height:1; }.advanced[open] summary::after,.guide[open] summary::after { content:"−"; }.advanced-inner { display:flex; flex-direction:column; gap:14px; padding-top:14px; }.range-row { display:flex; align-items:center; gap:12px; }.range-row input { width:100%; accent-color:var(--digit); cursor:pointer; }.time-pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }.small-time { height:38px; padding:0 5px; font-size:12px; }.row-divider { height:1px; background:var(--line); }
+    .guide { border-top:1px solid var(--line); padding-top:17px; }.guide-content { display:flex; flex-direction:column; gap:0; padding-top:12px; }.guide-content p { display:grid; grid-template-columns:minmax(88px,.85fr) 1.3fr; gap:10px; margin:0; padding:10px 0; border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent); }.guide-content strong { color:var(--digit); font-size:10px; line-height:1.3; }.guide-content span { color:var(--date); font-size:10px; line-height:1.35; }
+    .edge { position:absolute; z-index:3; top:50%; right:0; width:2px; height:33px; border-radius:4px 0 0 4px; background:var(--digit); opacity:0; transform:translateY(-50%); transition:opacity 360ms ease; pointer-events:none; }.edge.peek { opacity:.52; }
+    @media (orientation:portrait) and (max-width:700px) { .time { font-size:clamp(68px,22vw,170px); }.clock-inner { transform:translate(calc(var(--oled-x,0) * 1px),calc(-3vh + var(--oled-y,0) * 1px)); }.date { margin-top:28px; }.settings { width:74vw; }.panel-open .clock { transform:translateX(-17vw); } }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { transition-duration:.01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="app" id="app" aria-label="Reloj">
+    <div class="edge" id="edge" aria-hidden="true"></div>
+    <section class="clock" aria-label="Hora actual">
+      <div class="battery" id="battery" hidden aria-label="Batería"><span class="battery-fill" id="batteryFill"></span></div>
+      <div class="clock-inner">
+        <div class="time" id="time" aria-label="Hora actual"><span id="hours">00</span><span class="time-colon">:</span><span id="minutes">00</span></div>
+        <div class="date" id="dateLine"><span id="weekday"></span><b>·</b><span id="fullDate"></span></div>
+      </div>
+    </section>
+    <div class="dimmer" aria-hidden="true"></div>
+
+    <aside class="settings" id="settings" aria-label="Personalizar reloj" aria-hidden="true">
+      <div class="setting-block">
+        <span class="setting-label">Fondo</span>
+        <div class="swatches">
+          <button class="theme" data-theme="night" aria-label="Fondo noche" aria-pressed="true" style="--sample:#080a0c;--sample-light:radial-gradient(circle at 72% 18%,#25416a,transparent 57%)"></button>
+          <button class="theme" data-theme="paper" aria-label="Fondo papel" aria-pressed="false" style="--sample:#e9e4da;--sample-light:radial-gradient(circle at 30% 27%,#fff,transparent 43%)"></button>
+          <button class="theme" data-theme="cobalt" aria-label="Fondo cobalto" aria-pressed="false" style="--sample:#10256d;--sample-light:radial-gradient(circle at 74% 35%,#05b9e8,transparent 55%)"></button>
+          <button class="theme" data-theme="forest" aria-label="Fondo bosque" aria-pressed="false" style="--sample:#0b211c;--sample-light:radial-gradient(circle at 70% 20%,#356b4d,transparent 55%)"></button>
+          <button class="theme" data-theme="plum" aria-label="Fondo ciruela" aria-pressed="false" style="--sample:#27152f;--sample-light:radial-gradient(circle at 75% 30%,#733864,transparent 55%)"></button>
+          <button class="theme" data-theme="sunset" aria-label="Fondo atardecer" aria-pressed="false" style="--sample:#f08c65;--sample-light:linear-gradient(135deg,#f4be72,#d76789)"></button>
+        </div>
+      </div>
+      <div class="setting-block">
+        <span class="setting-label">Diseño</span>
+        <div class="styles">
+          <button class="style" data-style="soft" aria-label="Diseño suave" aria-pressed="true"><span class="glyph"><i></i><i></i></span></button>
+          <button class="style" data-style="precise" aria-label="Diseño preciso" aria-pressed="false"><span class="glyph"><i></i><i></i></span></button>
+          <button class="style" data-style="wide" aria-label="Diseño amplio" aria-pressed="false"><span class="glyph"><i></i><i></i></span></button>
+        </div>
+        <div class="colors">
+          <button class="color" data-color="#c8ff5a" style="--color:#c8ff5a" aria-label="Lima" aria-pressed="true"></button>
+          <button class="color" data-color="#66d9ff" style="--color:#66d9ff" aria-label="Azul" aria-pressed="false"></button>
+          <button class="color" data-color="#ff8cc6" style="--color:#ff8cc6" aria-label="Rosa" aria-pressed="false"></button>
+          <button class="color" data-color="#ffd166" style="--color:#ffd166" aria-label="Amarillo" aria-pressed="false"></button>
+          <button class="color" data-color="#ffffff" style="--color:#ffffff" aria-label="Blanco" aria-pressed="false"></button>
+        </div>
+      </div>
+      <div class="setting-block">
+        <span class="setting-label">Pantalla</span>
+        <div class="option-list">
+          <div class="option-row"><div class="option-copy"><strong>Fecha</strong><small>Mostrar día, mes y año</small></div><button class="switch" data-toggle="showDate" role="switch" aria-label="Mostrar fecha" aria-pressed="true"></button></div>
+          <div class="option-row"><div class="option-copy"><strong>Formato 24 horas</strong><small>Usar hora militar</small></div><button class="switch" data-toggle="format24" role="switch" aria-label="Formato 24 horas" aria-pressed="true"></button></div>
+        </div>
+      </div>
+      <div class="setting-block">
+        <span class="setting-label">Alarma</span>
+        <div class="alarm-card">
+          <div class="option-row"><div class="option-copy"><strong>Activar alarma</strong><small class="alarm-state" id="alarmState">Desactivada</small></div><button class="switch" data-toggle="alarmEnabled" role="switch" aria-label="Activar alarma" aria-pressed="false"></button></div>
+          <label class="time-field" for="alarmTime">Hora de alarma<input class="time-input" id="alarmTime" type="time" aria-label="Hora de alarma" value="07:00" disabled /></label>
+          <p class="alarm-note">Solo sonará cuando esta aplicación esté abierta.</p>
+        </div>
+      </div>
+      <details class="advanced">
+        <summary>Más opciones</summary>
+        <div class="advanced-inner">
+          <div class="option-list">
+            <div class="option-row"><div class="option-copy"><strong>Protección OLED</strong><small>Mueve el reloj suavemente</small></div><button class="switch" data-toggle="oled" role="switch" aria-label="Protección OLED" aria-pressed="true"></button></div>
+            <div class="option-row"><div class="option-copy"><strong>Color automático</strong><small>Cambia según la hora</small></div><button class="switch" data-toggle="autoColor" role="switch" aria-label="Color automático" aria-pressed="false"></button></div>
+            <div class="option-row"><div class="option-copy"><strong>Indicador de batería</strong><small>Si el navegador lo permite</small></div><button class="switch" data-toggle="showBattery" role="switch" aria-label="Mostrar batería" aria-pressed="false"></button></div>
+          </div>
+          <div class="option-list">
+            <div class="option-row"><div class="option-copy"><strong>Brillo nocturno</strong><small>Atenúa la pantalla por la noche</small></div><button class="switch" data-toggle="nightMode" role="switch" aria-label="Brillo nocturno" aria-pressed="true"></button></div>
+            <div class="time-pair"><input class="time-input small-time" id="nightStart" type="time" aria-label="Comienzo del modo nocturno" value="22:00" /><input class="time-input small-time" id="nightEnd" type="time" aria-label="Fin del modo nocturno" value="07:00" /></div>
+          </div>
+          <div class="option-list">
+            <div class="option-row"><div class="option-copy"><strong>Click de minuto</strong><small>Volumen del sonido clásico</small></div><button class="switch" data-toggle="muted" role="switch" aria-label="Silenciar click" aria-pressed="false"></button></div>
+            <div class="range-row"><input id="volume" type="range" min="0" max="100" value="32" aria-label="Volumen del click" /></div>
+          </div>
+        </div>
+      </details>
+      <details class="guide">
+        <summary>Guía rápida</summary>
+        <div class="guide-content">
+          <p><strong>Fondo, diseño y color</strong><span>Cambian el aspecto del reloj.</span></p>
+          <p><strong>Fecha</strong><span>La oculta para dejar solo la hora.</span></p>
+          <p><strong>Formato 24 horas</strong><span>Cambia entre 24 h y 12 h.</span></p>
+          <p><strong>Alarma</strong><span>Actívala primero; después podrás elegir la hora. Solo funciona con Reloj abierto.</span></p>
+          <p><strong>Protección OLED</strong><span>Mueve ligeramente el reloj para evitar marcas en pantalla.</span></p>
+          <p><strong>Brillo nocturno</strong><span>Atenúa visualmente el reloj entre las horas que elijas.</span></p>
+          <p><strong>Click de minuto</strong><span>Ajusta o silencia el sonido del cambio de minuto.</span></p>
+          <p><strong>Batería y color auto</strong><span>La batería se muestra si el navegador lo permite; el color auto cambia según la hora.</span></p>
+        </div>
+      </details>
+    </aside>
+    <audio id="chime" preload="none" src="clock-click.wav"></audio>
+  </main>
+
+  <script>
+    (() => {
+      const root=document.documentElement, app=document.getElementById('app'), panel=document.getElementById('settings'), edge=document.getElementById('edge'), time=document.getElementById('time'), chime=document.getElementById('chime'), battery=document.getElementById('battery'), batteryFill=document.getElementById('batteryFill');
+      const defaults={theme:'night',style:'soft',color:'#c8ff5a',oled:true,nightMode:true,nightStart:'22:00',nightEnd:'07:00',showDate:true,format24:true,autoColor:false,showBattery:false,muted:false,volume:32,alarmEnabled:false,alarmTime:'07:00'};
+      let config; try{config={...defaults,...JSON.parse(localStorage.getItem('reloj-settings')||'{}')};}catch{config={...defaults};}
+      const themes={
+        night:{bg:'#080a0c',date:'rgba(244,245,242,.56)',line:'rgba(244,245,242,.15)',glow:'radial-gradient(ellipse 76% 90% at 84% 3%,rgba(37,65,106,.52),transparent 55%),radial-gradient(ellipse 58% 70% at 8% 105%,rgba(25,52,53,.36),transparent 58%)'},
+        paper:{bg:'#e9e4da',date:'rgba(34,33,31,.56)',line:'rgba(34,33,31,.14)',glow:'radial-gradient(ellipse 70% 80% at 11% 5%,rgba(255,255,255,.92),transparent 54%),radial-gradient(ellipse 60% 60% at 100% 100%,rgba(194,171,137,.27),transparent 60%)'},
+        cobalt:{bg:'#10256d',date:'rgba(236,246,255,.58)',line:'rgba(236,246,255,.16)',glow:'radial-gradient(ellipse 67% 98% at 78% 0%,rgba(0,207,255,.55),transparent 53%),radial-gradient(ellipse 60% 70% at 4% 100%,rgba(68,68,209,.5),transparent 64%)'},
+        forest:{bg:'#0b211c',date:'rgba(236,244,232,.55)',line:'rgba(236,244,232,.14)',glow:'radial-gradient(ellipse 72% 85% at 89% 8%,rgba(45,111,74,.54),transparent 56%),radial-gradient(ellipse 60% 60% at 4% 95%,rgba(100,91,29,.22),transparent 65%)'},
+        plum:{bg:'#27152f',date:'rgba(255,241,251,.55)',line:'rgba(255,241,251,.15)',glow:'radial-gradient(ellipse 75% 85% at 84% 8%,rgba(127,58,116,.6),transparent 55%),radial-gradient(ellipse 65% 70% at 6% 99%,rgba(57,46,118,.44),transparent 62%)'},
+        sunset:{bg:'#f08c65',date:'rgba(50,24,26,.6)',line:'rgba(50,24,26,.18)',glow:'radial-gradient(ellipse 75% 90% at 83% 8%,rgba(255,232,143,.65),transparent 53%),radial-gradient(ellipse 66% 65% at 8% 100%,rgba(197,74,129,.32),transparent 62%)'}
+      };
+      const styles={soft:{font:'ui-sans-serif,-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif',weight:'650',spacing:'-.075em'},precise:{font:'ui-monospace,"SF Mono","Roboto Mono",Consolas,monospace',weight:'760',spacing:'-.095em'},wide:{font:'ui-sans-serif,-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif',weight:'430',spacing:'.005em'}};
+      const validTime=x=>/^([01]\d|2[0-3]):[0-5]\d$/.test(x);
+      if(!themes[config.theme])config.theme=defaults.theme;if(!styles[config.style])config.style=defaults.style;if(!validTime(config.nightStart))config.nightStart=defaults.nightStart;if(!validTime(config.nightEnd))config.nightEnd=defaults.nightEnd;if(!validTime(config.alarmTime))config.alarmTime=defaults.alarmTime;config.volume=Math.max(0,Math.min(100,Number(config.volume)||0));
+      let batteryManager=null,audioReady=false,keepAwakeEnabled=false,wakeLock=null,minuteTimer=null,firstRender=true,lastAlarmKey='',alarmTimers=[];
+      const set=(name,value)=>root.style.setProperty(name,value);
+      const hourOf=value=>Number(value.split(':')[0]);
+      function isNight(hour){const start=hourOf(config.nightStart),end=hourOf(config.nightEnd);return start===end?false:(start<end?hour>=start&&hour<end:hour>=start||hour<end);}
+      function colorFor(hour){if(!config.autoColor)return config.color;if(hour>=6&&hour<10)return '#66d9ff';if(hour>=10&&hour<18)return '#c8ff5a';if(hour>=18&&hour<22)return '#ffd166';return '#8cc8ff';}
+      function updateOled(now){if(!config.oled){set('--oled-x',0);set('--oled-y',0);return;}const positions=[[0,0],[2,0],[2,1],[0,1],[-2,1],[-2,0],[-2,-1],[0,-1],[2,-1]];const p=positions[Math.floor(now.getTime()/300000)%positions.length];set('--oled-x',p[0]);set('--oled-y',p[1]);}
+      function syncControls(){
+        document.querySelectorAll('[data-theme]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.theme===config.theme));document.querySelectorAll('[data-style]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.style===config.style));document.querySelectorAll('[data-color]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.color===config.color));document.querySelectorAll('[data-toggle]').forEach(x=>x.setAttribute('aria-pressed',Boolean(config[x.dataset.toggle])));
+        const alarmInput=document.getElementById('alarmTime'),alarmState=document.getElementById('alarmState'),nightStart=document.getElementById('nightStart'),nightEnd=document.getElementById('nightEnd'),volume=document.getElementById('volume');
+        alarmInput.value=config.alarmTime;alarmInput.disabled=!config.alarmEnabled;alarmState.textContent=config.alarmEnabled?'Activada':'Desactivada';alarmState.classList.toggle('is-on',config.alarmEnabled);
+        nightStart.value=config.nightStart;nightEnd.value=config.nightEnd;nightStart.disabled=!config.nightMode;nightEnd.disabled=!config.nightMode;
+        volume.value=config.volume;volume.disabled=config.muted;
+      }
+      function setSoundVolume(){chime.volume=config.muted?0:config.volume/100;}
+      function updateBattery(){if(!batteryManager||!config.showBattery){battery.hidden=true;return;}const level=Math.round(batteryManager.level*100);batteryFill.style.width=level+'%';battery.classList.toggle('charging',batteryManager.charging);battery.setAttribute('aria-label',`Batería ${level}%${batteryManager.charging?', cargando':''}`);battery.hidden=false;}
+      function apply(now=new Date()){
+        const t=themes[config.theme],s=styles[config.style];set('--bg',t.bg);set('--date',t.date);set('--line',t.line);set('--glow',t.glow);set('--display',s.font);set('--weight',s.weight);set('--spacing',s.spacing);set('--digit',colorFor(now.getHours()));
+        app.classList.toggle('date-hidden',!config.showDate);app.classList.toggle('night-dim',config.nightMode&&isNight(now.getHours()));document.querySelector('meta[name="theme-color"]').content=t.bg;setSoundVolume();syncControls();updateOled(now);updateBattery();localStorage.setItem('reloj-settings',JSON.stringify(config));
+      }
+      function render(now){let h=now.getHours();if(!config.format24)h=h%12||12;const hours=String(h).padStart(2,'0'),minutes=String(now.getMinutes()).padStart(2,'0');document.getElementById('hours').textContent=hours;document.getElementById('minutes').textContent=minutes;time.setAttribute('aria-label',`${hours}:${minutes}`);const parts=new Intl.DateTimeFormat('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).formatToParts(now);document.getElementById('weekday').textContent=parts.find(x=>x.type==='weekday')?.value||'';document.getElementById('fullDate').textContent=`${parts.find(x=>x.type==='day')?.value||''} ${parts.find(x=>x.type==='month')?.value||''} ${parts.find(x=>x.type==='year')?.value||''}`;}
+      function playClick(){if(!audioReady||config.muted)return;chime.currentTime=0;chime.play().catch(()=>{});}
+      function stopAlarm(){alarmTimers.forEach(clearTimeout);alarmTimers=[];chime.pause();chime.currentTime=0;}
+      function ringAlarm(){stopAlarm();for(let i=0;i<7;i++)alarmTimers.push(setTimeout(playClick,i*720));}
+      function checkAlarm(now){if(!config.alarmEnabled)return false;const key=`${now.toDateString()}-${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;if(key.endsWith(config.alarmTime)&&key!==lastAlarmKey){lastAlarmKey=key;ringAlarm();return true;}return false;}
+      function open(){app.classList.add('panel-open');panel.setAttribute('aria-hidden','false');}function close(){app.classList.remove('panel-open');panel.setAttribute('aria-hidden','true');}
+      function wakeSound(){if(audioReady)return;const original=chime.volume;chime.volume=0;chime.play().then(()=>{chime.pause();chime.currentTime=0;audioReady=true;chime.volume=original;setSoundVolume();}).catch(()=>{chime.volume=original;});}
+      async function keepScreenAwake(){if(!keepAwakeEnabled||wakeLock||!('wakeLock'in navigator)||document.visibilityState!=='visible')return;try{wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}catch(e){}}
+      function immersive(){wakeSound();keepAwakeEnabled=true;keepScreenAwake();if(!document.fullscreenElement&&document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().then(()=>screen.orientation?.lock?.('landscape').catch(()=>{})).catch(()=>{});}
+      document.querySelectorAll('[data-theme]').forEach(x=>x.addEventListener('click',()=>{config.theme=x.dataset.theme;apply();}));document.querySelectorAll('[data-style]').forEach(x=>x.addEventListener('click',()=>{config.style=x.dataset.style;apply();}));document.querySelectorAll('[data-color]').forEach(x=>x.addEventListener('click',()=>{config.color=x.dataset.color;apply();}));document.querySelectorAll('[data-toggle]').forEach(x=>x.addEventListener('click',()=>{const k=x.dataset.toggle;config[k]=!config[k];if(k==='alarmEnabled'&&!config[k])stopAlarm();apply();}));
+      document.getElementById('volume').addEventListener('input',e=>{config.volume=Number(e.target.value);if(config.volume>0)config.muted=false;apply();});document.getElementById('alarmTime').addEventListener('change',e=>{if(validTime(e.target.value)){config.alarmTime=e.target.value;apply();}});document.getElementById('nightStart').addEventListener('change',e=>{if(validTime(e.target.value)){config.nightStart=e.target.value;apply();}});document.getElementById('nightEnd').addEventListener('change',e=>{if(validTime(e.target.value)){config.nightEnd=e.target.value;apply();}});
+      async function initBattery(){if(!navigator.getBattery)return;try{batteryManager=await navigator.getBattery();['levelchange','chargingchange'].forEach(e=>batteryManager.addEventListener(e,updateBattery));updateBattery();}catch(e){}}
+      let x0=0,y0=0;app.addEventListener('pointerdown',e=>{x0=e.clientX;y0=e.clientY;stopAlarm();immersive();},{passive:true});app.addEventListener('pointerup',e=>{const dx=e.clientX-x0,dy=e.clientY-y0;if(Math.abs(dx)>58&&Math.abs(dx)>Math.abs(dy)*1.15){if(dx<0)open();else close();}else if(app.classList.contains('panel-open')&&!panel.contains(e.target))close();},{passive:true});
+      document.addEventListener('keydown',e=>{if(e.key==='Escape'||e.key==='ArrowRight')close();if(e.key==='ArrowLeft')open();});
+      function peek(){edge.classList.add('peek');setTimeout(()=>edge.classList.remove('peek'),1600);}
+      function nextMinute(){const now=new Date();render(now);apply(now);const alarmed=checkAlarm(now);if(!firstRender&&!alarmed)playClick();firstRender=false;clearTimeout(minuteTimer);minuteTimer=setTimeout(nextMinute,60000-(Date.now()%60000)+35);}
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden){firstRender=true;nextMinute();keepScreenAwake();}});
+      nextMinute();peek();initBattery();
+      window.addEventListener('load',()=>{if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().catch(()=>{});if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});});
+    })();
+  </script>
+</body>
+</html>
